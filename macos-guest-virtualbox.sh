@@ -2,7 +2,7 @@
 # Push-button installer of macOS on VirtualBox
 # (c) myspaghetti, licensed under GPL2.0 or higher
 # url: https://github.com/myspaghetti/macos-virtualbox
-# version 0.97.2
+# version 0.97.3
 
 #       Dependencies: bash  coreutils  gzip  unzip  wget  xxd  dmg2img
 #  Optional features: tesseract-ocr  tesseract-ocr-eng
@@ -10,7 +10,7 @@
 #               VirtualBox >= 6.1.6     dmg2img >= 1.6.5
 #               GNU bash >= 4.3         GNU coreutils >= 8.22
 #               GNU gzip >= 1.5         GNU wget >= 1.14
-#               Info-ZIP unzip >= 6.0   xxd >= 1.11,
+#               Info-ZIP unzip >= 6.0   xxd >= 1.11
 #               tesseract-ocr >= 4
 
 function set_variables() {
@@ -113,8 +113,9 @@ elif [[ -n "${BASH_VERSION}" ]]; then
               || "${BASH_VERSION:0:4}" =~ 4\.[12][0-9] ) ]]; then
         echo "Please execute this script with Bash 4.3 or higher, or zsh 5.5 or higher."
         if [[ -n "$(sw_vers 2>/dev/null)" ]]; then
-            echo "macOS detected. Make sure the script is not executed with"
-            echo "the default /bin/bash which is version 3."
+            echo "macOS detected. Make sure the script is not executed with the default /bin/bash"
+            echo "which is version 3. Explicitly type the executable path, for example for zsh:"
+            echo "    ${highlight_color}/path/to/5.5/zsh macos-guest-virtualbox.sh${default_color}"
         fi
         exit
     fi
@@ -786,7 +787,7 @@ if [[ -n $(
            2>&1 VBoxManage storageattach "${vm_name}" --storagectl SATA --port 4 \
                --type dvddrive --medium "${vm_name}_populate_bootable_installer_virtual_disk.viso" >/dev/null
           ) ]]; then echo "Could not attach \"${vm_name}_populate_bootable_installer_virtual_disk.viso\". Exiting."; exit; fi
-echo -e "Starting virtual machine \"${vm_name}\".
+echo -e "\nStarting virtual machine \"${vm_name}\".
 This should take a couple of minutes. If booting fails, exit the script by
 pressing CTRL-C then see the documentation for information about applying
 different CPU profiles in the section ${highlight_color}CPU profiles and CPUID settings${default_color}."
@@ -797,7 +798,7 @@ prompt_lang_utils_terminal
 kbstring='/Volumes/bootinst-sh/bootinst.sh'
 send_keys
 send_enter
-echo "Partitioning the bootable installer virtual disk; loading base system onto the
+echo -e "\nPartitioning the bootable installer virtual disk; loading base system onto the
 installer virtual disk; moving installation files to installer virtual disk;
 updating the InstallInfo.plist file; and rebooting the virtual machine.
 
@@ -1139,7 +1140,7 @@ a QEMU virtual machine for use with Linux KVM for better performance.
 
         ${highlight_color}Storage size${default_color}
 The script by default assigns a target virtual disk storage size of 80GB, which
-is populated to about 20GB on the host on initial installation. After the
+is populated to about 25GB on the host on initial installation. After the
 installation is complete, the VDI storage size may be increased. First increase
 the virtual disk image size through VirtualBox Manager or VBoxManage, then in
 Terminal in the virtual machine execute the following command:
@@ -1160,7 +1161,12 @@ The following primary display resolutions are supported by macOS on VirtualBox:
   ${low_contrast_color}1440x900   1280x800   1024x768   640x480${default_color}
 Secondary displays can have an arbitrary resolution.
 
-        ${highlight_color}CPU profiles and CPUID settings${default_color}
+        ${highlight_color}Unsupported features${default_color}
+Developing and maintaining VirtualBox or macOS features is beyond the scope of
+this script. Some features may behave unexpectedly, such as USB device support,
+audio support, FileVault boot password prompt support, and other features.
+
+        ${highlight_color}CPU profiles and CPUID settings${default_color} (unsupported)
 macOS does not supprort every CPU supported by VirtualBox. If the macOS Base
 System does not boot, try applying different CPU profiles to the virtual
 machine with the ${low_contrast_color}VBoxManage${default_color} commands described below. First, while the
@@ -1177,12 +1183,7 @@ Available CPU profiles:
 If booting fails after trying each preconfigured CPU profile, the host's CPU
 requires specific ${highlight_color}macOS VirtualBox CPUID settings${default_color}.
 
-        ${highlight_color}Unsupported features${default_color}
-Developing and maintaining VirtualBox or macOS features is beyond the scope of
-this script. Some features may behave unexpectedly, such as USB device support,
-audio support, FileVault boot password prompt support, and other features.
-
-        ${highlight_color}Performance and deployment${default_color}
+        ${highlight_color}Performance and deployment${default_color} (unsupported)
 After successfully creating a working macOS virtual machine, consider importing
 the virtual machine into more performant virtualization software, or packaging
 it for configuration management platforms for automated deployment. These
@@ -1197,7 +1198,7 @@ default VirtualBox VDI format into the VMDK format with the following command:
 QEMU and KVM require additional configuration that is beyond the scope of the
 script.
 
-        ${highlight_color}VirtualBox Native Execution Manager${default_color}
+        ${highlight_color}VirtualBox Native Execution Manager${default_color} (unsupported)
 The VirtualBox Native Execution Manager (NEM) is an experimental VirtualBox
 feature. VirtualBox uses NEM when access to VT-x and AMD-V is blocked by
 virtualization software or execution protection features such as Hyper-V,
@@ -1206,21 +1207,21 @@ macOS and the macOS installer have memory corruption issues under NEM
 virtualization. The script checks for NEM and exits with an error message if
 NEM is detected.
 
-        ${highlight_color}Bootloaders${default_color}
+        ${highlight_color}Bootloaders${default_color} (unsupported)
 The macOS VirtualBox guest is loaded without extra bootloaders, but it is
 compatible with OpenCore. OpenCore requires additonal configuration that is
 beyond the scope of the script.
 
-        ${highlight_color}Display scaling${default_color}
+        ${highlight_color}Display scaling${default_color} (unsupported)
 VirtualBox does not supply an EDID for its virtual display, and macOS does not
 enable display scaling (high PPI) without an EDID. The bootloader OpenCore can
 inject an EDID which enables display scaling.
 
-        ${highlight_color}Audio${default_color}
+        ${highlight_color}Audio${default_color} (unsupported)
 macOS may not support any built-in VirtualBox audio controllers. The bootloader
 OpenCore may be able to load open-source audio drivers in VirtualBox.
 
-        ${highlight_color}FileVault${default_color}
+        ${highlight_color}FileVault${default_color} (unsupported)
 The VirtualBox EFI implementation does not properly load the FileVault full disk
 encryption password prompt upon boot. The bootloader OpenCore is be able to
 load the password prompt with the parameter \"ProvideConsoleGop\" set to \"true\".
@@ -1486,7 +1487,7 @@ function send_enter() {
 
 function prompt_lang_utils_terminal() {
     tesseract_ocr="$(tesseract --version 2>/dev/null)"
-    tesseract_lang="$(tesseract.exe --list-langs 2>/dev/null)"
+    tesseract_lang="$(tesseract --list-langs 2>/dev/null)"
     regex_ver='[Tt]esseract 4'  # for zsh quoted regex compatibility
     if [[ "${tesseract_ocr}" =~ ${regex_ver} && "${tesseract_lang}" =~ eng ]]; then
         echo -e "\n${low_contrast_color}Attempting automated recognition of virtual machine graphical user interface.${default_color}"
