@@ -2,7 +2,7 @@
 # Push-button installer of macOS on VirtualBox
 # (c) myspaghetti, licensed under GPL2.0 or higher
 # url: https://github.com/myspaghetti/macos-virtualbox
-# version 0.97.3
+# version 0.98.3
 
 #       Dependencies: bash  coreutils  gzip  unzip  wget  xxd  dmg2img
 #  Optional features: tesseract-ocr  tesseract-ocr-eng
@@ -10,7 +10,7 @@
 #               VirtualBox >= 6.1.6     dmg2img >= 1.6.5
 #               GNU bash >= 4.3         GNU coreutils >= 8.22
 #               GNU gzip >= 1.5         GNU wget >= 1.14
-#               Info-ZIP unzip >= 6.0   xxd >= 1.11
+#               Info-ZIP unzip >= 6.0   xxd with -e little endian support
 #               tesseract-ocr >= 4
 
 function set_variables() {
@@ -133,6 +133,18 @@ else
     echo "The script appears to be executed on a shell other than bash or zsh. Exiting."
     exit
 fi
+
+if [[ ! -t 1 ]]; then  # terminal is not interactive
+    tesseract_ocr="$(tesseract --version 2>/dev/null)"
+    tesseract_lang="$(tesseract --list-langs 2>/dev/null)"
+    regex_ver='[Tt]esseract 4'  # for zsh quoted regex compatibility
+    if [[ ! ( "${tesseract_ocr}" =~ ${regex_ver} ) || -z "${tesseract_lang}" ]]; then
+        echo "Running the script on a non-interactive shell requires the following packages:"
+        echo "    tesseract-ocr >= 4    tesseract-ocr-eng"
+        exit
+    fi
+fi
+
 }
 
 function check_gnu_coreutils_prefix() {
@@ -175,26 +187,29 @@ if [[ -n "$(sw_vers 2>/dev/null)" ]]; then
         echo -e "\nmacOS detected.\nPlease use a package manager such as ${highlight_color}homebrew${default_color}, ${highlight_color}pkgsrc${default_color}, ${highlight_color}nix${default_color}, or ${highlight_color}MacPorts${default_color}"
         echo "Please make sure the following packages are installed and that"
         echo "their path is in the PATH variable:"
-        echo -e "${highlight_color}bash  coreutils  dmg2img  gzip  unzip  wget  xxd${default_color}"
+        echo -e "    ${highlight_color}bash  coreutils  dmg2img  gzip  unzip  wget  xxd${default_color}"
         echo "Please make sure Bash and coreutils are the GNU variant."
         exit
     fi
 fi
 
-# check for xxd, gzip, unzip, coreutils, wget
-if [[ -z "$(echo -n "xxd" | xxd -e -p 2>/dev/null)" ||
-      -z "$(gzip --help 2>/dev/null)" ||
+# check for gzip, unzip, coreutils, wget
+if [[ -z "$(gzip --help 2>/dev/null)" ||
       -z "$(unzip -hh 2>/dev/null)" ||
       -z "$(csplit --help 2>/dev/null)" ||
       -z "$(wget --version 2>/dev/null)" ]]; then
     echo "Please make sure the following packages are installed"
     echo -e "and that they are of the version specified or newer:\n"
-    echo "    coreutils 8.22   wget 1.14   gzip 1.5   unzip 6.0   xxd 1.11"
+    echo "    coreutils 8.22   wget 1.14   gzip 1.5   unzip 6.0"
     echo -e "\nPlease make sure the coreutils and gzip packages are the GNU variant."
-    if [[ -z "$(echo -n "xxd" | xxd -e -p 2>/dev/null))" ]]; then
-        echo -e "\nMost xxd V1.11 binaries print their version as V1.10 or V1.7."
-        echo "The package vim-common-8 and newer provides the correct version."
-    fi
+    exit
+fi
+
+# check that xxd supports endianness -e flag
+if [[ -z "$(echo -n "xxd" | xxd -e -p 2>/dev/null)" ]]; then
+    echo "Please make sure a version of xxd which supports the -e option is installed."
+    echo -e "The -e option should be listed when executing   ${low_contrast_color}xxd --help${default_color}"
+    echo "The package vim-common-8 provides a compatible version on most modern distros."
     exit
 fi
 
@@ -223,7 +238,7 @@ if [[ -n "$(cygcheck -V 2>/dev/null)" ]]; then
             }
             echo "Found VBoxManage"
         else
-            echo "Please make sure VirtualBox version 6.0 or higher is installed, and that"
+            echo "Please make sure VirtualBox version 5.2 or higher is installed, and that"
             echo "the path to the VBoxManage.exe executable is in the PATH variable, or assign"
             echo "in the script the full path including the name of the executable to"
             echo -e "the variable ${highlight_color}cmd_path_VBoxManage${default_color}"
@@ -255,7 +270,7 @@ elif [[ "$(cat /proc/sys/kernel/osrelease 2>/dev/null)" =~ [Mm]icrosoft ]]; then
     fi
 # everything else (not cygwin and not wsl)
 elif [[ -z "$(VBoxManage -v 2>/dev/null)" ]]; then
-    echo "Please make sure VirtualBox version 6.0 or higher is installed,"
+    echo "Please make sure VirtualBox version 5.2 or higher is installed,"
     echo "and that the path to the VBoxManage executable is in the PATH variable."
     exit
 fi
@@ -763,7 +778,8 @@ echo "/bootinst.sh=\"${vm_name}_bootinst.txt\"" >> "${vm_name}_populate_bootable
 # Partitining largest disk as APFS
 # Partition second-largest disk as JHFS+
 echo '# this script is executed on the macOS virtual machine' > "${vm_name}_bootinst.txt"
-echo 'disks="$(diskutil list | grep -o "\*[0-9][^ ]* GB *disk[0-9]$" | grep -o "[0-9].*" | sort -gr | grep -o disk[0-9] )" && \
+echo 'disks="$(diskutil list | grep -o "\*[0-9][^ ]* [GTP]B *disk[0-9]$" | grep -o "[0-9].*")" && \
+disks="$(echo "${disks}" | sed -e "s/\.[0-9] T/000.0 G/" -e "s/\.[0-9] P/000000.0 G/" | sort -gr | grep -o disk[0-9] )" && \
 disks=(${disks[@]}) && \
 if [ -z "${disks}" ]; then echo "Could not find disks"; fi && \
 [ -n "${disks[0]}" ] && \
@@ -811,7 +827,7 @@ print_dimly "If the partitioning fails, exit the script by pressing CTRL-C
 Otherwise, please wait."
 while [[ "$( VBoxManage list runningvms )" =~ \""${vm_name}"\" ]]; do sleep 2 >/dev/null 2>&1; done
 echo "Waiting for the VirtualBox GUI to shut off."
-for (( i=10; i>0; i-- )); do echo -ne "   \r${i} "; sleep 0.5; done; echo -e "\r   "
+animated_please_wait 10
 # Detach the original 2GB BaseSystem virtual disk image
 # and release basesystem VDI from VirtualBox configuration
 if [[ -n $(
@@ -819,12 +835,18 @@ if [[ -n $(
     2>&1 VBoxManage closemedium "${macOS_release_name}_BaseSystem.${storage_format}" >/dev/null
     ) ]]; then
     echo "Could not detach ${macOS_release_name}_BaseSystem.${storage_format}"
-    echo "It's possible the VirtualBox GUI took longer than five seconds to shut off."
-    echo "The macOS installation may be resumed with the following command:"
-    echo "  ${highlight_color}${0} populate_macos_target_disk${default_color}"
-    exit
+    echo "The script will try to detach the virtual disk image. If this takes more than"
+    echo "a few seconds, terminate the script with CTRL-C, manually shut down VirtualBox,"
+    echo "and resume with the following stages as described in the documentation:"
+    echo "      ${highlight_color}create_target_virtual_disk populate_macos_target_disk${default_color}"
+    while [[ -n $(
+        2>&1 VBoxManage storageattach "${vm_name}" --storagectl SATA --port 3 --medium none >/dev/null
+        2>&1 VBoxManage closemedium "${macOS_release_name}_BaseSystem.${storage_format}" >/dev/null
+        ) ]]; do
+        animated_please_wait 10
+    done
 fi
-echo "${macOS_release_name}_BaseSystem.${storage_format} successfully detached from"
+echo -e "\n${macOS_release_name}_BaseSystem.${storage_format} successfully detached from"
 echo "the virtual machine and released from VirtualBox Manager."
 }
 
@@ -902,7 +924,8 @@ echo "/startosinstall.sh=\"${vm_name}_startosinstall.txt\"" >> "${vm_name}_popul
 # execute script concurrently, catch SIGUSR1 when installer finishes preparing
 echo '# this script is executed on the macOS virtual machine' > "${vm_name}_configure_nvram.txt"
 echo 'printf '"'"'trap "exit 0" SIGUSR1; while true; do sleep 10; done;'"'"' | sh && \
-disks="$(diskutil list | grep -o "[0-9][^ ]* GB *disk[0-9]$" | sort -gr | grep -o disk[0-9])" && \
+disks="$(diskutil list | grep -o "[0-9][^ ]* [GTP]B *disk[0-9]$")" && \
+disks="$(echo "${disks}" | sed -e "s/\.[0-9] T/000.0 G/" -e "s/\.[0-9] P/000000.0 G/" | sort -gr | grep -o disk[0-9])" && \
 disks=(${disks[@]}) && \
 mkdir -p "/Volumes/'"${vm_name}"'/tmp/mount_efi" && \
 mount_msdos /dev/${disks[0]}s1 "/Volumes/'"${vm_name}"'/tmp/mount_efi" && \
@@ -916,7 +939,8 @@ kill -SIGUSR1 ${installer_pid}' > "${vm_name}_configure_nvram.txt"
 echo '# this script is executed on the macOS virtual machine' > "${vm_name}_startosinstall.txt"
 echo 'background_pid="$(ps | grep '"'"' sh$'"'"' | cut -d '"'"' '"'"' -f 3)" && \
 [[ "${background_pid}" =~ ^[0-9][0-9]*$ ]] && \
-disks="$(diskutil list | grep -o "[0-9][^ ]* GB *disk[0-9]$" | sort -gr | grep -o disk[0-9])" && \
+disks="$(diskutil list | grep -o "[0-9][^ ]* [GTP]B *disk[0-9]$")" && \
+disks="$(echo "${disks}" | sed -e "s/\.[0-9] T/000.0 G/" -e "s/\.[0-9] P/000000.0 G/" | sort -gr | grep -o disk[0-9])" && \
 disks=(${disks[@]}) && \
 [ -n "${disks[0]}" ] && \
 diskutil partitionDisk "/dev/${disks[0]}" 1 GPT APFS "'"${vm_name}"'" R && \
@@ -987,6 +1011,7 @@ else
                      "${macOS_release_name}_BaseSystem"*
                      "${macOS_release_name}_Install"*
                      "${macOS_release_name}_bootable_installer"*
+                     "${macOS_release_name}_"*".viso"
                      "${vm_name}_"*".png"
                      "${vm_name}_"*".bin"
                      "${vm_name}_"*".txt"
@@ -1078,7 +1103,7 @@ name and serial number, board ID and serial number, and other genuine
 (or genuine-like) Apple parameters. These parameters may be edited at the top
 of the script or loaded through a configuration file as described in the
 section above. Assigning these parameters is not required when installing or
-using macOS, only when connecting to the iCould app, iMessage, and other
+using macOS, only when connecting to the iCloud app, iMessage, and other
 apps that authenticate the device with Apple.
 
 These are the variables that are usually required for iMessage connectivity:
@@ -1122,12 +1147,12 @@ ${low_contrast_color}configure_vm create_nvram_files create_macos_installation_f
 After executing the command, attach the resulting VISO file to the virtual
 machine's storage through VirtualBox Manager or VBoxManage. Power up the VM
 and boot macOS, then start Terminal and execute the following commands, making
-sure to replace \"/Volumes/path/to/VISO/\" with the correct path:
+sure to replace \"[VISO_mountpoint]\" with the correct path:
 
     ${low_contrast_color}mkdir ESP${default_color}
     ${low_contrast_color}sudo su # this will prompt for a password${default_color}
     ${low_contrast_color}diskutil mount -mountPoint ESP disk0s1${default_color}
-    ${low_contrast_color}cp -r /Volumes/path/to/VISO/ESP/* ESP/${default_color}
+    ${low_contrast_color}cp -r /Volumes/[VISO_mountpoint]/ESP/* ESP/${default_color}
 
 After copying the files, boot into the EFI Internal Shell as described in the
 section \"Applying the EFI and NVRAM parameters\".
@@ -1209,7 +1234,7 @@ NEM is detected.
 
         ${highlight_color}Bootloaders${default_color} (unsupported)
 The macOS VirtualBox guest is loaded without extra bootloaders, but it is
-compatible with OpenCore. OpenCore requires additonal configuration that is
+compatible with OpenCore. OpenCore requires additional configuration that is
 beyond the scope of the script.
 
         ${highlight_color}Display scaling${default_color} (unsupported)
@@ -1304,7 +1329,7 @@ function sleep() {
 }
 
 # create a viso with no files
-create_viso_header() {
+function create_viso_header() {
     # input: filename volume-id (two positional parameters, both required)
     # output: nothing to stdout, viso file to working directory
     local uuid="$(xxd -p -l 16 /dev/urandom)"
@@ -1494,8 +1519,8 @@ function prompt_lang_utils_terminal() {
         animated_please_wait 30
         for i in $(seq 1 60); do  # try automatic ocr for about 5 minutes
             VBoxManage controlvm "${vm_name}" screenshotpng "${vm_name}_screenshot.png" 2>&1 1>/dev/null
-            ocr="$(tesseract "${vm_name}_screenshot.png" - --dpi 70 -l eng 2>/dev/null)"
-            regex='Language|English'  # for zsh quoted regex compatibility
+            ocr="$(tesseract "${vm_name}_screenshot.png" - --psm 11 --dpi 72 -l eng 2>/dev/null)"
+            regex='Language|English|Fran.ais'  # for zsh quoted regex compatibility
             if [[ "${ocr}" =~ ${regex} ]]; then
                 animated_please_wait 20
                 send_enter
@@ -1505,7 +1530,8 @@ function prompt_lang_utils_terminal() {
                 kbspecial='CTRLprs F2 CTRLrls u ENTER t ENTER'  # start Terminal
                 send_special
             fi
-            if [[ "${ocr}" =~ Terminal\ Shell ]]; then
+            regex='Terminal.Shell|Terminal.*sh.?-'  # for zsh quoted regex compatibility
+            if [[ "${ocr}" =~ ${regex} ]]; then
                 sleep 2
                 return
             fi

@@ -8,7 +8,7 @@ A default install only requires the user to sit patiently and, less than ten tim
 
 Tested on `bash` and `zsh` on [Cygwin](https://cygwin.com/install.html). Works on macOS, CentOS 7, and Windows. Should work on most modern Linux distros.
 
-macOS Catalina (10.15), Mojave (10.14), and High Sierra (10.13) currently supported. The virtual machine may be upgraded to Big Sur (11.0) through macOS Software Update.
+macOS Catalina (10.15), Mojave (10.14), and High Sierra (10.13) currently supported. The virtual machine may be upgraded to Big Sur 11.1 through Software Update.
 
 ## Documentation
 
@@ -32,6 +32,10 @@ The following primary display resolutions are supported by macOS on VirtualBox: 
 
 Developing and maintaining VirtualBox or macOS features is beyond the scope of this script. Some features may behave unexpectedly, such as USB device support, audio support, FileVault boot password prompt support, and other features.
 
+### CPU compatibility
+
+macOS guests on VirtualBox are incompatible with some CPU models. If the guest macOS boot process hangs on “LoadKernelFromStream”, “EndRandomSeed”, or "EXITBS", see the [documentation command](#documentation) regarding VirtualBox CPU profiles and [CPUID settings](https://www.virtualbox.org/manual/ch08.html#vboxmanage-modifyvm-teleport). Some CPU models released in 2020 and later may require configuring the guest to "Mac OS X (64-bit)" instead of "macOS 10.13 High Sierra (64-bit)".
+
 ### Performance and deployment
 
 After successfully creating a working macOS virtual machine, consider importing it into more performant virtualization software, or packaging it for configuration management platforms for automated deployment. These virtualization and deployment applications require additional configuration that is beyond the scope of the script.
@@ -40,7 +44,7 @@ QEMU with KVM is capable of providing virtual machine hardware passthrough for n
 
 #### VirtualBox Native Execution Manager (NEM)
 
-The VirtualBox Native Execution Manager (NEM) is an experimental VirtualBox feature. VirtualBox uses NEM when access to VT-x and AMD-V is blocked by virtualization software or execution protection features such as Hyper-V, Windows Sandbox, WSL2, memory integrity protection, and other software. macOS and the macOS installer have memory corruption issues under NEM virtualization. The script checks for NEM and exits with an error message if it is detected.
+The VirtualBox Native Execution Manager (NEM) is an experimental VirtualBox feature. VirtualBox uses NEM when access to VT-x and AMD-V is blocked by virtualization software or execution protection features such as Hyper-V, Windows Sandbox, WSL2, memory integrity protection, Device Guard,  and other software. macOS and the macOS installer have memory corruption issues under NEM virtualization. The script checks for NEM and exits with an error message if it is detected.
 
 ### Bootloaders
 
